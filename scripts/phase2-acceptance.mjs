@@ -5,6 +5,7 @@ const files = {
   data: "src/data/platformData.ts",
   service: "src/data/mockService.ts",
   ui: "src/components/ui.tsx",
+  styles: "src/styles.css",
   readme: "README.md",
 };
 
@@ -41,6 +42,21 @@ const checks = [
   ["pilot submission state", source.app, /submittedLead/],
   ["shared empty state component", source.ui, /export function EmptyState/],
   ["responsive button sizing", source.ui, /min-h-11/],
+  ["buttons prevent icon shrink", source.ui, /shrink-0/],
+  ["panels prevent child overflow", source.ui, /min-w-0 rounded/],
+  ["safe modal viewport width", source.ui, /w-\[calc\(100vw-2rem\)\]/],
+  ["table horizontal overflow guard", source.app, /overflow-x-auto/],
+  ["mobile navigation exists", source.app, /lg:hidden/],
+  ["loading state copy", source.app, /分析进行中/],
+  ["failure state copy", source.app, /失败待处理|失败/],
+  ["retry action copy", source.app, /重试/],
+  ["print stylesheet", source.styles, /@media print/],
+  ["global border-box", source.styles, /box-sizing:\s*border-box/],
+  ["global horizontal overflow guard", source.styles, /overflow-x:\s*clip/],
+  ["long text wrap guard", source.styles, /overflow-wrap:\s*anywhere/],
+  ["media max width guard", source.styles, /img,\s*\nsvg,\s*\ncanvas,\s*\nvideo/],
+  ["no negative or custom tracking classes", `${source.app}\n${source.ui}`, /^(?![\s\S]*tracking-)/],
+  ["no viewport-scaled text classes", `${source.app}\n${source.ui}\n${source.styles}`, /^(?![\s\S]*text-\[[^\]]*(vw|vh|cqw|cqi)[^\]]*\])/],
   ["phase2 readme path", source.readme, /试点线索跟进/],
   ["phase2 readme import step", source.readme, /新建 \/ 导入样例/],
 ];
@@ -52,9 +68,7 @@ const pipelineWeight = [...source.data.matchAll(/weight:\s*(\d+)/g)].reduce(
   0,
 );
 
-if (pipelineWeight !== 100) {
-  checks.push(["analysis pipeline sums to 100", `${pipelineWeight}`, /^100$/]);
-}
+checks.push(["analysis pipeline sums to 100", `${pipelineWeight}`, /^100$/]);
 
 const failures = checks
   .filter(([, text, pattern]) => !pattern.test(text))

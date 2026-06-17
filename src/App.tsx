@@ -416,7 +416,7 @@ function TopNav({
             <MousePointer2 className="h-5 w-5" />
           </span>
           <span>
-            <span className="block text-sm font-semibold tracking-tight text-ink">
+            <span className="block text-sm font-semibold text-ink">
               智鼠云析
             </span>
             <span className="hidden text-xs text-slate-500 sm:block">
@@ -533,7 +533,7 @@ function ShowcasePath({
 
   return (
     <Panel tight className="mb-5 bg-white/72">
-      <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-blue-600">
+      <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase text-blue-600">
         <Route className="h-4 w-4" />
         演示路径
       </div>
@@ -587,7 +587,7 @@ function HomePage({ onNavigate }: { onNavigate: (page: PageKey) => void }) {
               <Sparkles className="h-3.5 w-3.5 text-blue-600" />
               多模态感知 · 行为识别 · 药物助研
             </div>
-            <h1 className="max-w-4xl text-5xl font-semibold tracking-tight text-ink sm:text-6xl lg:text-7xl">
+            <h1 className="max-w-4xl text-5xl font-semibold text-ink sm:text-6xl lg:text-7xl">
               智鼠云析
             </h1>
             <p className="mt-5 max-w-2xl text-2xl font-medium leading-tight text-slate-800 sm:text-3xl">
@@ -623,7 +623,7 @@ function HomePage({ onNavigate }: { onNavigate: (page: PageKey) => void }) {
             <Panel className="ml-auto max-w-md bg-white/84">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-600">
+                  <p className="text-xs font-semibold uppercase text-blue-600">
                     Live Analysis
                   </p>
                   <h3 className="mt-2 text-2xl font-semibold text-ink">
@@ -726,10 +726,10 @@ function HomePage({ onNavigate }: { onNavigate: (page: PageKey) => void }) {
         <div className="mx-auto max-w-7xl rounded-[2.5rem] bg-ink p-6 text-white shadow-glow md:p-10">
           <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-cyan-200">
+              <p className="text-xs font-bold uppercase text-cyan-200">
                 Application scenarios
               </p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
+              <h2 className="mt-3 text-3xl font-semibold md:text-4xl">
                 面向真实科研场景，而不是通用视频识别工具
               </h2>
               <p className="mt-4 text-sm leading-7 text-slate-300">
@@ -791,7 +791,7 @@ function DashboardPage({
         <Panel className="bg-ink text-white">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-cyan-200">
+              <p className="text-xs font-bold uppercase text-cyan-200">
                 Operations cockpit
               </p>
               <h3 className="mt-3 text-2xl font-semibold">运行态摘要</h3>
@@ -2079,7 +2079,7 @@ function AnalysisPage({
           <Panel className="bg-ink text-white">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-cyan-200">
+                <p className="text-xs font-bold uppercase text-cyan-200">
                   Fusion result
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold">多模态融合结果</h3>
@@ -2327,7 +2327,7 @@ function PilotPage({
       <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-5">
           <Panel className="bg-ink text-white">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-cyan-200">
+            <p className="text-xs font-bold uppercase text-cyan-200">
               Suitable teams
             </p>
             <h3 className="mt-3 text-2xl font-semibold">合作对象</h3>
@@ -2714,7 +2714,7 @@ function ReportDocument({
       <div className="border-b border-slate-200 pb-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-blue-600">
+            <p className="text-xs font-bold uppercase text-blue-600">
               智鼠云析 · Analysis report
             </p>
             <h3 className="mt-3 text-2xl font-semibold leading-tight text-ink">
