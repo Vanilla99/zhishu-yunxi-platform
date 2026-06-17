@@ -10,6 +10,12 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html {
   scroll-behavior: smooth;
   background: #f5f8fc;
@@ -18,10 +24,30 @@ html {
 body {
   margin: 0;
   min-width: 320px;
+  overflow-x: clip;
   background:
     radial-gradient(circle at 12% 4%, rgba(94, 234, 212, 0.14), transparent 28%),
     radial-gradient(circle at 84% 10%, rgba(72, 101, 255, 0.12), transparent 32%),
     #f5f8fc;
+}
+
+img,
+svg,
+canvas,
+video {
+  max-width: 100%;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+button,
+td,
+th,
+span {
+  overflow-wrap: anywhere;
 }
 
 button,
@@ -29,6 +55,7 @@ input,
 select,
 textarea {
   font: inherit;
+  max-width: 100%;
 }
 
 ::selection {

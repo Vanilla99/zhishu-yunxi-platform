@@ -93,11 +93,11 @@ export function SectionTitle({
     <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div>
         {eyebrow ? (
-          <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-blue-600">
+          <p className="mb-2 text-xs font-bold uppercase text-blue-600">
             {eyebrow}
           </p>
         ) : null}
-        <h2 className="text-2xl font-semibold tracking-tight text-ink md:text-3xl">
+        <h2 className="text-2xl font-semibold text-ink md:text-3xl">
           {title}
         </h2>
         {description ? (
@@ -158,7 +158,7 @@ export function MetricCard({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-medium text-slate-500">{label}</p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-ink">
+          <p className="mt-2 text-2xl font-semibold text-ink">
             {value}
           </p>
           <p className="mt-1 text-xs font-semibold text-blue-600">{delta}</p>
@@ -289,7 +289,7 @@ export function Modal({
         >
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <Dialog.Title className="text-xl font-semibold tracking-tight text-ink">
+              <Dialog.Title className="text-xl font-semibold text-ink">
                 {title}
               </Dialog.Title>
               {description ? (
