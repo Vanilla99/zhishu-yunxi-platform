@@ -42,6 +42,7 @@ http://localhost:5174/
 ## 验证命令
 
 ```bash
+npm run phase2:check
 npm run build
 npm audit
 ```
