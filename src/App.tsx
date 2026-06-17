@@ -96,6 +96,7 @@ import { cn } from "./lib/utils";
 import {
   Button,
   DownloadButton,
+  EmptyState,
   EmptyVideoFrame,
   MetricCard,
   Modal,
@@ -1033,6 +1034,7 @@ function ExperimentsPage({
     dataType: "全部数据类型",
     drug: "全部药物",
     sex: "全部性别",
+    status: "全部状态",
     report: "全部报告状态",
   });
   const [keyword, setKeyword] = useState("");
@@ -1070,10 +1072,11 @@ function ExperimentsPage({
         item.dataType.includes(filters.dataType.replace("文件", ""));
       const drugHit = filters.drug === "全部药物" || item.drug === filters.drug;
       const sexHit = filters.sex === "全部性别" || item.sex === filters.sex;
+      const statusHit = filters.status === "全部状态" || item.status === filters.status;
       const reportHit =
         filters.report === "全部报告状态" ||
         (filters.report === "已生成报告" ? item.reportReady : !item.reportReady);
-      return keywordHit && typeHit && dataTypeHit && drugHit && sexHit && reportHit;
+      return keywordHit && typeHit && dataTypeHit && drugHit && sexHit && statusHit && reportHit;
     });
   }, [filters, keyword]);
 
@@ -1170,7 +1173,7 @@ function ExperimentsPage({
       }
     >
       <Panel>
-        <div className="grid gap-4 lg:grid-cols-[1.2fr_repeat(5,1fr)]">
+        <div className="grid gap-4 lg:grid-cols-3 xl:grid-cols-[1.2fr_repeat(6,1fr)]">
           <label className="block">
             <span className="mb-1.5 block text-xs font-semibold text-slate-500">
               关键词
@@ -1210,11 +1213,41 @@ function ExperimentsPage({
             options={["全部性别", "雄性", "雌性"]}
           />
           <SelectShell
+            label="实验状态"
+            value={filters.status}
+            onChange={(value) => updateFilter("status", value)}
+            options={["全部状态", "已完成", "分析中", "待分析", "需复核"]}
+          />
+          <SelectShell
             label="报告状态"
             value={filters.report}
             onChange={(value) => updateFilter("report", value)}
             options={["全部报告状态", "已生成报告", "未生成报告"]}
           />
+        </div>
+        <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-ink">状态切换</p>
+            <p className="mt-1 text-xs text-slate-500">
+              快速切换实验状态视图，便于复核待处理样例。
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {["全部状态", "已完成", "分析中", "待分析", "需复核"].map((status) => (
+              <button
+                key={status}
+                onClick={() => updateFilter("status", status)}
+                className={cn(
+                  "rounded-full px-3 py-2 text-sm font-semibold transition",
+                  filters.status === status
+                    ? "bg-ink text-white shadow-sm"
+                    : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-blue-50 hover:text-blue-700",
+                )}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
         </div>
       </Panel>
 
@@ -1228,19 +1261,31 @@ function ExperimentsPage({
             同步记录
           </Button>
         </div>
-        <ExperimentTable
-          experiments={filtered.map((item) => ({
-            ...item,
-            focus: focusedIds.includes(item.id),
-          }))}
-          onView={(id) => setDetail(experiments.find((item) => item.id === id) ?? null)}
-          onAnalyze={(id) => onSelectExperiment(id, "analysis")}
-          onReport={(id) => {
-            onSelectExperiment(id);
-            onNavigate("reports");
-          }}
-          onFocus={toggleFocus}
-        />
+        {filtered.length ? (
+          <ExperimentTable
+            experiments={filtered.map((item) => ({
+              ...item,
+              focus: focusedIds.includes(item.id),
+            }))}
+            onView={(id) => setDetail(experiments.find((item) => item.id === id) ?? null)}
+            onAnalyze={(id) => onSelectExperiment(id, "analysis")}
+            onReport={(id) => {
+              onSelectExperiment(id);
+              onNavigate("reports");
+            }}
+            onFocus={toggleFocus}
+          />
+        ) : (
+          <EmptyState
+            title="没有匹配的实验记录"
+            description="可以放宽筛选条件，或导入一个新的样例实验继续演示分析链路。"
+            action={
+              <Button size="sm" icon={UploadCloud} onClick={() => setImportOpen(true)}>
+                导入样例
+              </Button>
+            }
+          />
+        )}
       </Panel>
 
       <Modal

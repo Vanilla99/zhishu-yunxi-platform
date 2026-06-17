@@ -7,6 +7,7 @@ import {
   CircleDot,
   Download,
   ExternalLink,
+  Inbox,
   Loader2,
   X,
   type LucideIcon,
@@ -31,10 +32,10 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50",
-        size === "sm" && "h-9 px-3 text-sm",
-        size === "md" && "h-11 px-5 text-sm",
-        size === "lg" && "h-12 px-6 text-base",
+        "inline-flex min-w-0 items-center justify-center gap-2 rounded-full text-center font-semibold leading-5 transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50",
+        size === "sm" && "min-h-9 px-3 py-1.5 text-sm",
+        size === "md" && "min-h-11 px-5 py-2 text-sm",
+        size === "lg" && "min-h-12 px-6 py-2.5 text-base",
         variant === "primary" &&
           "bg-ink text-white shadow-glow hover:-translate-y-0.5 hover:bg-slate-900",
         variant === "secondary" &&
@@ -49,7 +50,7 @@ export function Button({
       )}
       {...props}
     >
-      {Icon ? <Icon className="h-4 w-4" /> : null}
+      {Icon ? <Icon className="h-4 w-4 shrink-0" /> : null}
       {children}
     </button>
   );
@@ -177,6 +178,31 @@ export function MetricCard({
         </div>
       </div>
     </Panel>
+  );
+}
+
+export function EmptyState({
+  title,
+  description,
+  action,
+  icon: Icon = Inbox,
+}: {
+  title: string;
+  description: string;
+  action?: ReactNode;
+  icon?: LucideIcon;
+}) {
+  return (
+    <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50/80 px-6 py-10 text-center">
+      <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-100">
+        <Icon className="h-5 w-5" />
+      </span>
+      <h4 className="mt-4 text-base font-semibold text-ink">{title}</h4>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+        {description}
+      </p>
+      {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
+    </div>
   );
 }
 
