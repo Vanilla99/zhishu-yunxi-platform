@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: #f5f8fc;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    radial-gradient(circle at 12% 4%, rgba(94, 234, 212, 0.14), transparent 28%),
+    radial-gradient(circle at 84% 10%, rgba(72, 101, 255, 0.12), transparent 32%),
+    #f5f8fc;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(37, 99, 235, 0.16);
+}
+
+table th {
+  border-bottom: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.8rem 0.75rem;
+  white-space: nowrap;
+}
+
+table td {
+  border-bottom: 1px solid #edf2f7;
+  color: #475569;
+  padding: 0.9rem 0.75rem;
+  vertical-align: middle;
+}
+
+table tbody tr {
+  transition:
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+table tbody tr:hover {
+  background: rgba(239, 246, 255, 0.72);
+}
+
+.recharts-wrapper,
+.recharts-surface {
+  outline: none;
+}
+
+@media (max-width: 640px) {
+  table th,
+  table td {
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+  }
+}
+
+@media print {
+  body {
+    background: #fff !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .report-document,
+  .report-document * {
+    visibility: visible;
+  }
+
+  .report-document {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    min-height: auto !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  .report-document button,
+  .no-print {
+    display: none !important;
+  }
+}
