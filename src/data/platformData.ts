@@ -47,6 +47,19 @@ export type Experiment = {
   duration: string;
   confidence: number;
   keyFinding: string;
+  source?: "平台样例" | "本地导入" | "合作试点";
+  createdAt?: string;
+  owner?: string;
+  qualityScore?: number;
+  files?: ExperimentFile[];
+};
+
+export type ExperimentFile = {
+  id: string;
+  type: string;
+  name: string;
+  size: string;
+  status: "已就绪" | "上传完成" | "校验中" | "需补充";
 };
 
 export type Report = {
@@ -58,6 +71,62 @@ export type Report = {
   conclusion: string;
   status: "可下载" | "生成中" | "待复核";
   score: number;
+  version?: string;
+  reviewer?: string;
+  updatedAt?: string;
+};
+
+export type AnalysisStageKey =
+  | "validate"
+  | "frame"
+  | "detect"
+  | "track"
+  | "behavior"
+  | "usv"
+  | "fusion"
+  | "report";
+
+export type AnalysisPipelineStage = {
+  key: AnalysisStageKey;
+  title: string;
+  detail: string;
+  weight: number;
+};
+
+export type AnalysisJobStatus = "排队中" | "运行中" | "失败" | "已完成";
+
+export type AnalysisJob = {
+  id: string;
+  experimentId: string;
+  title: string;
+  tasks: string[];
+  status: AnalysisJobStatus;
+  progress: number;
+  currentStage: AnalysisStageKey;
+  createdAt: string;
+  updatedAt: string;
+  reportId?: string;
+  failureReason?: string;
+};
+
+export type PilotLeadStatus = "新申请" | "已联系" | "方案确认" | "试点排期";
+
+export type PilotLead = {
+  id: string;
+  company: string;
+  contact: string;
+  phone: string;
+  industry: string;
+  department: string;
+  scale: string;
+  dataType: string;
+  need: string;
+  note: string;
+  needsLocal: boolean;
+  priority: "高" | "中" | "低";
+  status: PilotLeadStatus;
+  nextAction: string;
+  createdAt: string;
 };
 
 export const navItems: Array<{ key: PageKey; label: string }> = [
@@ -309,19 +378,55 @@ export const analysisTasks = [
   "多模态融合分析",
 ];
 
-export const analysisSteps = [
-  "正在校验实验数据",
-  "正在读取视频帧",
-  "正在进行视频裁剪",
-  "正在执行目标检测",
-  "正在进行目标跟踪",
-  "正在提取行为片段",
-  "正在读取超声波数据",
-  "正在进行超声波特征提取",
-  "正在进行时序分割",
-  "正在调用行为识别模型",
-  "正在进行多模态融合",
-  "正在生成分析结果",
+export const analysisPipeline: AnalysisPipelineStage[] = [
+  {
+    key: "validate",
+    title: "数据校验",
+    detail: "校验视频、声学文件与实验信息表完整性",
+    weight: 8,
+  },
+  {
+    key: "frame",
+    title: "视频帧读取",
+    detail: "抽取关键帧并建立可复核时间轴",
+    weight: 12,
+  },
+  {
+    key: "detect",
+    title: "目标检测",
+    detail: "定位小鼠主体、遮挡片段与运动区域",
+    weight: 14,
+  },
+  {
+    key: "track",
+    title: "轨迹跟踪",
+    detail: "生成运动轨迹、速度和区域覆盖指标",
+    weight: 12,
+  },
+  {
+    key: "behavior",
+    title: "行为识别",
+    detail: "识别行走、静止、嗅探、追逐等行为片段",
+    weight: 18,
+  },
+  {
+    key: "usv",
+    title: "超声波分析",
+    detail: "提取 USV 频率、功率、密度和行为关联",
+    weight: 14,
+  },
+  {
+    key: "fusion",
+    title: "多模态融合",
+    detail: "融合视频、声学与实验信息形成结论",
+    weight: 14,
+  },
+  {
+    key: "report",
+    title: "报告草稿",
+    detail: "生成可预览、可打印、可下载的报告草稿",
+    weight: 8,
+  },
 ];
 
 export const behaviorSegments = [
@@ -457,6 +562,111 @@ export const reports: Report[] = [
     conclusion: "空白对照组行为轨迹稳定，适合作为教学复盘样例",
     status: "可下载",
     score: 86,
+  },
+];
+
+export const initialAnalysisJobs: AnalysisJob[] = [
+  {
+    id: "JOB-20260616-1042",
+    experimentId: "EXP-2406-018",
+    title: "低剂量镇静反应 · 多模态融合",
+    tasks: ["多模态融合分析", "药物影响分析"],
+    status: "已完成",
+    progress: 100,
+    currentStage: "report",
+    createdAt: "2026-06-16 09:42",
+    updatedAt: "2026-06-16 10:42",
+    reportId: "RPT-20260616-1042",
+  },
+  {
+    id: "JOB-20260616-1128",
+    experimentId: "EXP-2406-031",
+    title: "剂量梯度响应 · 药物影响评估",
+    tasks: ["药物影响分析", "超声波行为预测"],
+    status: "已完成",
+    progress: 100,
+    currentStage: "report",
+    createdAt: "2026-06-16 10:58",
+    updatedAt: "2026-06-16 11:28",
+    reportId: "RPT-20260616-1128",
+  },
+  {
+    id: "JOB-20260616-1204",
+    experimentId: "EXP-2406-021",
+    title: "社交行为干预 · 声学视频融合",
+    tasks: ["追逐行为识别", "超声波行为预测"],
+    status: "运行中",
+    progress: 68,
+    currentStage: "fusion",
+    createdAt: "2026-06-16 11:36",
+    updatedAt: "2026-06-16 12:04",
+    reportId: "RPT-20260616-1204",
+  },
+  {
+    id: "JOB-20260615-2135",
+    experimentId: "EXP-2406-027",
+    title: "昼夜节律观察 · 红外复核",
+    tasks: ["行走行为识别", "静止行为识别"],
+    status: "失败",
+    progress: 46,
+    currentStage: "track",
+    createdAt: "2026-06-15 21:08",
+    updatedAt: "2026-06-15 21:20",
+    failureReason: "红外视频 00:18:40-00:21:15 遮挡严重，建议重试并启用人工复核。",
+  },
+];
+
+export const initialPilotLeads: PilotLead[] = [
+  {
+    id: "LEAD-2406-012",
+    company: "华东医学院行为实验中心",
+    contact: "陈老师",
+    phone: "138****2681",
+    industry: "医学院实验室",
+    department: "神经科学实验平台",
+    scale: "50-200 组实验",
+    dataType: "普通视频 + 红外视频 + 超声波",
+    need: "小鼠行为分析试点",
+    note: "希望先用 20 组历史数据验证识别准确率。",
+    needsLocal: false,
+    priority: "高",
+    status: "方案确认",
+    nextAction: "发送试点方案与样例报告",
+    createdAt: "2026-06-15 16:20",
+  },
+  {
+    id: "LEAD-2406-015",
+    company: "北辰临床前研究中心",
+    contact: "李经理",
+    phone: "136****8052",
+    industry: "药企临床前研究中心",
+    department: "药效评价部",
+    scale: "200 组以上",
+    dataType: "普通视频 + 超声波",
+    need: "药物实验数据复盘",
+    note: "重点关注剂量梯度和 USV 密度关系。",
+    needsLocal: true,
+    priority: "高",
+    status: "已联系",
+    nextAction: "安排本地化部署需求访谈",
+    createdAt: "2026-06-16 10:05",
+  },
+  {
+    id: "LEAD-2406-018",
+    company: "西南高校教学平台",
+    contact: "周老师",
+    phone: "135****6120",
+    industry: "高校科研教学单位",
+    department: "动物行为教学实验室",
+    scale: "10-50 组实验",
+    dataType: "普通视频",
+    need: "科研合作",
+    note: "希望用于课程演示和学生实验复盘。",
+    needsLocal: false,
+    priority: "中",
+    status: "新申请",
+    nextAction: "确认课程演示时间",
+    createdAt: "2026-06-17 09:18",
   },
 ];
 

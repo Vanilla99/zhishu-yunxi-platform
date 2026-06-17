@@ -41,6 +41,7 @@ import {
   Printer,
   RefreshCcw,
   Route,
+  RotateCcw,
   Search,
   Send,
   Sparkles,
@@ -51,7 +52,7 @@ import {
 } from "lucide-react";
 import heroImage from "./assets/hero-lab.png";
 import {
-  analysisSteps,
+  analysisPipeline,
   analysisTasks,
   behaviorDistribution,
   behaviorSegments,
@@ -62,6 +63,8 @@ import {
   dataTypeShare,
   dataTypes,
   experiments,
+  initialAnalysisJobs,
+  initialPilotLeads,
   navItems,
   painPoints,
   pilotMethods,
@@ -73,17 +76,27 @@ import {
   ultrasoundSegments,
   ultrasoundTrend,
   waveformData,
+  type AnalysisJob,
   type Experiment,
+  type ExperimentFile,
   type PageKey,
+  type PilotLead,
   type Report,
 } from "./data/platformData";
-import { cn, formatPercent } from "./lib/utils";
 import {
-  ActionLink,
+  createAnalysisJob,
+  createExperimentFromDraft,
+  createPilotLead,
+  createReportFromJob,
+  formatNow,
+  getStageProgress,
+  inferExperimentFile,
+} from "./data/mockService";
+import { cn } from "./lib/utils";
+import {
   Button,
   DownloadButton,
   EmptyVideoFrame,
-  LoadingButtonLabel,
   MetricCard,
   Modal,
   MotionBlock,
@@ -110,8 +123,12 @@ const showcasePath: Array<{ key: PageKey; label: string; caption: string }> = [
   { key: "pilot", label: "合作试点", caption: "提交合作意向" },
 ];
 
-function getReportForExperiment(experimentId: string) {
-  return reports.find((report) => report.experimentId === experimentId) ?? reports[0];
+function getReportForExperiment(experimentId: string, reportRows: Report[]) {
+  return (
+    reportRows.find((report) => report.experimentId === experimentId) ??
+    reportRows[0] ??
+    reports[0]
+  );
 }
 
 function buildReportHtml(report: Report, experiment: Experiment) {
@@ -152,8 +169,9 @@ function buildReportHtml(report: Report, experiment: Experiment) {
 </html>`;
 }
 
-function downloadReport(report: Report) {
-  const experiment = experiments.find((item) => item.id === report.experimentId) ?? experiments[0];
+function downloadReport(report: Report, experimentRows: Experiment[]) {
+  const experiment =
+    experimentRows.find((item) => item.id === report.experimentId) ?? experiments[0];
   const blob = new Blob([buildReportHtml(report, experiment)], {
     type: "text/html;charset=utf-8",
   });
@@ -172,6 +190,10 @@ type AppState = {
 };
 
 export default function App() {
+  const [experimentRows, setExperimentRows] = useState<Experiment[]>(() => experiments);
+  const [reportRows, setReportRows] = useState<Report[]>(() => reports);
+  const [analysisJobs, setAnalysisJobs] = useState<AnalysisJob[]>(() => initialAnalysisJobs);
+  const [pilotLeads, setPilotLeads] = useState<PilotLead[]>(() => initialPilotLeads);
   const [state, setState] = useState<AppState>({
     page: "home",
     selectedExperimentId: experiments[0].id,
@@ -187,7 +209,7 @@ export default function App() {
   };
 
   const selectExperiment = (experimentId: string, page?: PageKey) => {
-    const relatedReport = getReportForExperiment(experimentId);
+    const relatedReport = getReportForExperiment(experimentId, reportRows);
     setState((current) => ({
       ...current,
       selectedExperimentId: experimentId,
@@ -197,7 +219,7 @@ export default function App() {
   };
 
   const selectReport = (reportId: string, page?: PageKey) => {
-    const relatedReport = reports.find((item) => item.id === reportId);
+    const relatedReport = reportRows.find((item) => item.id === reportId);
     setState((current) => ({
       ...current,
       selectedReportId: reportId,
@@ -207,7 +229,7 @@ export default function App() {
   };
 
   const openReportForExperiment = (experimentId: string) => {
-    const relatedReport = getReportForExperiment(experimentId);
+    const relatedReport = getReportForExperiment(experimentId, reportRows);
     setState((current) => ({
       ...current,
       selectedExperimentId: experimentId,
@@ -216,17 +238,89 @@ export default function App() {
     }));
   };
 
-  const markAnalysisComplete = (experimentId: string) => {
-    const relatedReport = getReportForExperiment(experimentId);
+  const importExperiment = (draft: Parameters<typeof createExperimentFromDraft>[0], files: ExperimentFile[]) => {
+    const experiment = createExperimentFromDraft(draft, files, experimentRows.length);
+    setExperimentRows((current) => [experiment, ...current]);
+    setState((current) => ({
+      ...current,
+      selectedExperimentId: experiment.id,
+      page: "experiments",
+    }));
+    return experiment;
+  };
+
+  const upsertAnalysisJob = (job: AnalysisJob) => {
+    setAnalysisJobs((current) => {
+      const exists = current.some((item) => item.id === job.id);
+      return exists
+        ? current.map((item) => (item.id === job.id ? job : item))
+        : [job, ...current];
+    });
+  };
+
+  const completeAnalysisJob = (job: AnalysisJob) => {
+    const experiment =
+      experimentRows.find((item) => item.id === job.experimentId) ?? experimentRows[0];
+    const report = createReportFromJob(job, experiment, reportRows);
+    const completedJob: AnalysisJob = {
+      ...job,
+      status: "已完成",
+      progress: 100,
+      currentStage: "report",
+      reportId: report.id,
+      updatedAt: report.generatedAt,
+      failureReason: undefined,
+    };
+
+    setAnalysisJobs((current) =>
+      current.map((item) => (item.id === job.id ? completedJob : item)),
+    );
+    setReportRows((current) => [report, ...current.filter((item) => item.id !== report.id)]);
+    setExperimentRows((current) =>
+      current.map((item) =>
+        item.id === job.experimentId
+          ? {
+              ...item,
+              status: "已完成",
+              reportReady: true,
+              confidence: Math.max(item.confidence, report.score),
+              lastAnalysis: report.generatedAt,
+              keyFinding: report.conclusion,
+            }
+          : item,
+      ),
+    );
     setAnalysisSignal({
-      completedExperimentId: experimentId,
-      generatedReportId: relatedReport.id,
+      completedExperimentId: job.experimentId,
+      generatedReportId: report.id,
     });
     setState((current) => ({
       ...current,
-      selectedExperimentId: experimentId,
-      selectedReportId: relatedReport.id,
+      selectedExperimentId: job.experimentId,
+      selectedReportId: report.id,
     }));
+  };
+
+  const retryAnalysisJob = (jobId: string) => {
+    setAnalysisJobs((current) =>
+      current.map((job) =>
+        job.id === jobId
+          ? {
+              ...job,
+              status: "排队中",
+              progress: 0,
+              currentStage: "validate",
+              failureReason: undefined,
+            }
+          : job,
+      ),
+    );
+  };
+
+  const addPilotLead = (draft: Parameters<typeof createPilotLead>[0]) => {
+    const lead = createPilotLead(draft, pilotLeads.length);
+    setPilotLeads((current) => [lead, ...current]);
+    return lead;
   };
 
   useEffect(() => {
@@ -234,10 +328,10 @@ export default function App() {
   }, [state.page]);
 
   const activeExperiment =
-    experiments.find((item) => item.id === state.selectedExperimentId) ??
-    experiments[0];
+    experimentRows.find((item) => item.id === state.selectedExperimentId) ??
+    experimentRows[0];
   const activeReport =
-    reports.find((item) => item.id === state.selectedReportId) ?? reports[0];
+    reportRows.find((item) => item.id === state.selectedReportId) ?? reportRows[0];
 
   return (
     <div className="min-h-screen bg-[#f5f8fc] text-ink antialiased">
@@ -248,22 +342,31 @@ export default function App() {
         ) : null}
         {state.page === "dashboard" ? (
           <DashboardPage
+            experiments={experimentRows}
+            jobs={analysisJobs}
             onNavigate={navigate}
             onSelectExperiment={selectExperiment}
           />
         ) : null}
         {state.page === "experiments" ? (
           <ExperimentsPage
+            experiments={experimentRows}
             onNavigate={navigate}
             onSelectExperiment={selectExperiment}
+            onImportExperiment={importExperiment}
           />
         ) : null}
         {state.page === "analysis" ? (
           <AnalysisPage
             activeExperiment={activeExperiment}
+            experiments={experimentRows}
+            jobs={analysisJobs}
             onSelectExperiment={selectExperiment}
             onNavigate={navigate}
-            onAnalysisComplete={markAnalysisComplete}
+            onCreateJob={(tasks) => createAnalysisJob(activeExperiment, tasks)}
+            onUpsertJob={upsertAnalysisJob}
+            onCompleteJob={completeAnalysisJob}
+            onRetryJob={retryAnalysisJob}
             onOpenReport={openReportForExperiment}
             generatedReportId={analysisSignal.generatedReportId}
           />
@@ -271,13 +374,21 @@ export default function App() {
         {state.page === "reports" ? (
           <ReportsPage
             activeReport={activeReport}
+            reports={reportRows}
+            experiments={experimentRows}
             onSelectReport={selectReport}
             onSelectExperiment={selectExperiment}
             onNavigate={navigate}
             generatedReportId={analysisSignal.generatedReportId}
           />
         ) : null}
-        {state.page === "pilot" ? <PilotPage onNavigate={navigate} /> : null}
+        {state.page === "pilot" ? (
+          <PilotPage
+            leads={pilotLeads}
+            onCreateLead={addPilotLead}
+            onNavigate={navigate}
+          />
+        ) : null}
       </main>
       <Footer onNavigate={navigate} />
     </div>
@@ -642,12 +753,20 @@ function HomePage({ onNavigate }: { onNavigate: (page: PageKey) => void }) {
 }
 
 function DashboardPage({
+  experiments,
+  jobs,
   onNavigate,
   onSelectExperiment,
 }: {
+  experiments: Experiment[];
+  jobs: AnalysisJob[];
   onNavigate: (page: PageKey) => void;
   onSelectExperiment: (experimentId: string, page?: PageKey) => void;
 }) {
+  const runningJobs = jobs.filter((job) => job.status === "运行中" || job.status === "排队中");
+  const failedJobs = jobs.filter((job) => job.status === "失败");
+  const completedJobs = jobs.filter((job) => job.status === "已完成");
+
   return (
     <PageFrame
       eyebrow="Data cockpit"
@@ -665,6 +784,76 @@ function DashboardPage({
         {dashboardMetrics.map((metric) => (
           <MetricCard key={metric.label} {...metric} />
         ))}
+      </div>
+
+      <div className="mt-6 grid gap-5 lg:grid-cols-[0.86fr_1.14fr]">
+        <Panel className="bg-ink text-white">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.24em] text-cyan-200">
+                Operations cockpit
+              </p>
+              <h3 className="mt-3 text-2xl font-semibold">运行态摘要</h3>
+              <p className="mt-3 text-sm leading-7 text-slate-300">
+                从实验导入、任务排队、模型分析到报告生成，平台用同一套状态跟踪每个节点。
+              </p>
+            </div>
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-ink">
+              <LayoutDashboard className="h-6 w-6" />
+            </span>
+          </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            {[
+              ["运行 / 排队", `${runningJobs.length}`],
+              ["失败待处理", `${failedJobs.length}`],
+              ["完成任务", `${completedJobs.length}`],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-2xl border border-white/10 bg-white/8 p-4">
+                <p className="text-sm text-slate-300">{label}</p>
+                <p className="mt-2 text-3xl font-semibold text-white">{value}</p>
+              </div>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel>
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-ink">最近分析任务</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                点击重点实验可继续复核或生成报告。
+              </p>
+            </div>
+            <Button size="sm" variant="outline" icon={Play} onClick={() => onNavigate("analysis")}>
+              查看队列
+            </Button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {jobs.slice(0, 4).map((job) => {
+              const experiment = experiments.find((item) => item.id === job.experimentId);
+              return (
+                <button
+                  key={job.id}
+                  onClick={() => onSelectExperiment(job.experimentId, "analysis")}
+                  className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-left transition hover:border-blue-200 hover:bg-blue-50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-ink">{job.title}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {experiment?.mouseId ?? job.experimentId} · {job.updatedAt}
+                      </p>
+                    </div>
+                    <StatusBadge status={job.status} pulse={job.status === "运行中"} />
+                  </div>
+                  <div className="mt-4">
+                    <ProgressLine value={job.progress} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </Panel>
       </div>
 
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
@@ -826,11 +1015,18 @@ function DashboardPage({
 }
 
 function ExperimentsPage({
+  experiments,
   onNavigate,
   onSelectExperiment,
+  onImportExperiment,
 }: {
+  experiments: Experiment[];
   onNavigate: (page: PageKey) => void;
   onSelectExperiment: (experimentId: string, page?: PageKey) => void;
+  onImportExperiment: (
+    draft: Parameters<typeof createExperimentFromDraft>[0],
+    files: ExperimentFile[],
+  ) => Experiment;
 }) {
   const [filters, setFilters] = useState({
     type: "全部实验类型",
@@ -841,6 +1037,21 @@ function ExperimentsPage({
   });
   const [keyword, setKeyword] = useState("");
   const [detail, setDetail] = useState<Experiment | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importedFiles, setImportedFiles] = useState<ExperimentFile[]>([]);
+  const importFileInput = useRef<HTMLInputElement | null>(null);
+  const [draft, setDraft] = useState<Parameters<typeof createExperimentFromDraft>[0]>({
+    label: "新导入药物反应样例",
+    type: "药物影响评估",
+    mouseId: "M-NX45",
+    sex: "雄性",
+    drug: "候选化合物 C",
+    dose: "3.0 mg/kg",
+    concentration: "8 μM",
+    dataType: "普通视频 + 红外视频 + 超声波",
+    behavior: "行走 / 嗅探",
+    owner: "演示实验室",
+  });
   const [focusedIds, setFocusedIds] = useState(
     experiments.filter((item) => item.focus).map((item) => item.id),
   );
@@ -878,6 +1089,73 @@ function ExperimentsPage({
     );
   };
 
+  const updateDraft = <K extends keyof typeof draft>(key: K, value: (typeof draft)[K]) => {
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const addSampleFiles = () => {
+    setImportedFiles([
+      {
+        id: "FILE-SAMPLE-VIDEO",
+        name: "compound-c-main-video.mp4",
+        size: "2.8 GB",
+        type: "普通视频",
+        status: "上传完成",
+      },
+      {
+        id: "FILE-SAMPLE-INFRA",
+        name: "compound-c-infrared.mov",
+        size: "1.9 GB",
+        type: "红外视频",
+        status: "上传完成",
+      },
+      {
+        id: "FILE-SAMPLE-USV",
+        name: "compound-c-usv.wav",
+        size: "512 MB",
+        type: "超声波音频",
+        status: "上传完成",
+      },
+      {
+        id: "FILE-SAMPLE-PROFILE",
+        name: "compound-c-profile.xlsx",
+        size: "1.4 MB",
+        type: "实验信息表",
+        status: "上传完成",
+      },
+    ]);
+  };
+
+  const handleImportFiles = (fileList: FileList | null) => {
+    if (!fileList?.length) return;
+    setImportedFiles(Array.from(fileList).map(inferExperimentFile));
+  };
+
+  const submitImport = () => {
+    const experiment = onImportExperiment(
+      draft,
+      importedFiles.length ? importedFiles : [
+        {
+          id: "FILE-FALLBACK-VIDEO",
+          name: "new-experiment-main.mp4",
+          size: "2.1 GB",
+          type: "普通视频",
+          status: "上传完成",
+        },
+        {
+          id: "FILE-FALLBACK-USV",
+          name: "new-experiment-usv.wav",
+          size: "386 MB",
+          type: "超声波音频",
+          status: "上传完成",
+        },
+      ],
+    );
+    setFocusedIds((current) => [experiment.id, ...current]);
+    setDetail(experiment);
+    setImportOpen(false);
+  };
+
   return (
     <PageFrame
       eyebrow="Experiment samples"
@@ -886,8 +1164,8 @@ function ExperimentsPage({
       demoStep="experiments"
       onNavigate={onNavigate}
       action={
-        <Button icon={UploadCloud} onClick={() => onNavigate("analysis")}>
-          上传数据
+        <Button icon={UploadCloud} onClick={() => setImportOpen(true)}>
+          新建 / 导入样例
         </Button>
       }
     >
@@ -1054,37 +1332,186 @@ function ExperimentsPage({
           </div>
         ) : null}
       </Modal>
+
+      <Modal
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="新建 / 导入实验样例"
+        description="模拟真实接入流程：填写实验信息、上传文件、生成待分析实验记录。"
+        width="max-w-5xl"
+      >
+        <div className="grid gap-5 lg:grid-cols-[1fr_0.82fr]">
+          <Panel className="bg-slate-50/80">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="实验标签"
+                value={draft.label}
+                onChange={(value) => updateDraft("label", value)}
+              />
+              <SelectShell
+                label="实验类型"
+                value={draft.type}
+                onChange={(value) => updateDraft("type", value)}
+                options={["药物影响评估", "神经行为实验", "行为识别", "药物浓度实验", "多模态融合分析"]}
+              />
+              <Field
+                label="小鼠编号"
+                value={draft.mouseId}
+                onChange={(value) => updateDraft("mouseId", value)}
+              />
+              <SelectShell
+                label="小鼠性别"
+                value={draft.sex}
+                onChange={(value) => updateDraft("sex", value as "雄性" | "雌性")}
+                options={["雄性", "雌性"]}
+              />
+              <Field
+                label="药物名称"
+                value={draft.drug}
+                onChange={(value) => updateDraft("drug", value)}
+              />
+              <Field
+                label="注射剂量"
+                value={draft.dose}
+                onChange={(value) => updateDraft("dose", value)}
+              />
+              <Field
+                label="药物浓度"
+                value={draft.concentration}
+                onChange={(value) => updateDraft("concentration", value)}
+              />
+              <SelectShell
+                label="数据类型"
+                value={draft.dataType}
+                onChange={(value) => updateDraft("dataType", value)}
+                options={[
+                  "普通视频",
+                  "红外视频",
+                  "超声波音频",
+                  "普通视频 + 超声波",
+                  "普通视频 + 红外视频 + 超声波",
+                ]}
+              />
+              <Field
+                label="目标行为"
+                value={draft.behavior}
+                onChange={(value) => updateDraft("behavior", value)}
+              />
+              <Field
+                label="负责人"
+                value={draft.owner}
+                onChange={(value) => updateDraft("owner", value)}
+              />
+            </div>
+          </Panel>
+          <div className="space-y-5">
+            <Panel>
+              <button
+                onClick={() => importFileInput.current?.click()}
+                className="flex min-h-[180px] w-full flex-col items-center justify-center rounded-[1.75rem] border border-dashed border-blue-300 bg-blue-50/60 px-6 text-center transition hover:border-blue-500 hover:bg-blue-50"
+              >
+                <UploadCloud className="h-10 w-10 text-blue-600" />
+                <span className="mt-4 text-base font-semibold text-ink">
+                  上传实验文件
+                </span>
+                <span className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+                  支持视频、红外、超声波和实验表格。也可一键载入演示文件。
+                </span>
+              </button>
+              <input
+                ref={importFileInput}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(event) => handleImportFiles(event.target.files)}
+              />
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" icon={UploadCloud} onClick={addSampleFiles}>
+                  载入演示文件
+                </Button>
+                <Button size="sm" icon={Plus} onClick={submitImport}>
+                  生成实验记录
+                </Button>
+              </div>
+            </Panel>
+            <Panel>
+              <div className="mb-4 flex items-center justify-between">
+                <h4 className="font-semibold text-ink">待接入文件</h4>
+                <StatusBadge status={importedFiles.length ? "上传完成" : "等待文件"} />
+              </div>
+              <div className="space-y-3">
+                {(importedFiles.length ? importedFiles : [
+                  {
+                    id: "EMPTY-FILE",
+                    name: "尚未选择文件",
+                    size: "可使用演示文件",
+                    type: "等待接入",
+                    status: "需补充" as const,
+                  },
+                ]).map((file) => (
+                  <div
+                    key={file.id}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-ink">{file.name}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {file.type} · {file.size}
+                      </p>
+                    </div>
+                    <StatusBadge status={file.status} />
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          </div>
+        </div>
+      </Modal>
     </PageFrame>
   );
 }
 
 function AnalysisPage({
   activeExperiment,
+  experiments,
+  jobs,
   onSelectExperiment,
   onNavigate,
-  onAnalysisComplete,
+  onCreateJob,
+  onUpsertJob,
+  onCompleteJob,
+  onRetryJob,
   onOpenReport,
   generatedReportId,
 }: {
   activeExperiment: Experiment;
+  experiments: Experiment[];
+  jobs: AnalysisJob[];
   onSelectExperiment: (experimentId: string, page?: PageKey) => void;
   onNavigate: (page: PageKey) => void;
-  onAnalysisComplete: (experimentId: string) => void;
+  onCreateJob: (tasks: string[]) => AnalysisJob;
+  onUpsertJob: (job: AnalysisJob) => void;
+  onCompleteJob: (job: AnalysisJob) => void;
+  onRetryJob: (jobId: string) => void;
   onOpenReport: (experimentId: string) => void;
   generatedReportId: string;
 }) {
   const [inputMode, setInputMode] = useState<"sample" | "upload">("sample");
   const [selectedTasks, setSelectedTasks] = useState(["多模态融合分析", "药物影响分析"]);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(-1);
   const [running, setRunning] = useState(false);
   const [reportDraftReady, setReportDraftReady] = useState(false);
-  const [files, setFiles] = useState([
-    { name: "behavior-main.mp4", size: "2.4 GB", type: "普通视频", status: "已就绪" },
-    { name: "usv-track.wav", size: "438 MB", type: "超声波音频", status: "已就绪" },
+  const [files, setFiles] = useState<ExperimentFile[]>([
+    { id: "FILE-DEFAULT-VIDEO", name: "behavior-main.mp4", size: "2.4 GB", type: "普通视频", status: "已就绪" },
+    { id: "FILE-DEFAULT-USV", name: "usv-track.wav", size: "438 MB", type: "超声波音频", status: "已就绪" },
   ]);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const activeJob =
+    jobs.find((job) => job.id === activeJobId) ??
+    jobs.find((job) => job.experimentId === activeExperiment.id);
   const hasStarted = stepIndex >= 0;
-  const stepsComplete = stepIndex >= analysisSteps.length;
+  const stepsComplete = stepIndex >= analysisPipeline.length;
   const analysisComplete = stepsComplete && reportDraftReady;
 
   const progress =
@@ -1092,30 +1519,83 @@ function AnalysisPage({
       ? 100
       : stepIndex < 0
         ? 0
-        : Math.round(((stepIndex + 1) / analysisSteps.length) * 100);
+        : getStageProgress(stepIndex);
+  const displayedProgress = hasStarted ? progress : activeJob?.progress ?? 0;
+  const displayedStage =
+    activeJob && !hasStarted
+      ? analysisPipeline.find((stage) => stage.key === activeJob.currentStage)
+      : analysisPipeline[stepIndex];
+  const displayedStageIndex = hasStarted
+    ? stepIndex
+    : activeJob?.status === "已完成"
+      ? analysisPipeline.length
+      : displayedStage
+        ? analysisPipeline.findIndex((stage) => stage.key === displayedStage.key)
+        : -1;
 
   useEffect(() => {
     setStepIndex(-1);
     setRunning(false);
     setReportDraftReady(false);
+    setActiveJobId(null);
+    setFiles(
+      activeExperiment.files?.length
+        ? activeExperiment.files
+        : [
+            { id: "FILE-DEFAULT-VIDEO", name: "behavior-main.mp4", size: "2.4 GB", type: "普通视频", status: "已就绪" },
+            { id: "FILE-DEFAULT-USV", name: "usv-track.wav", size: "438 MB", type: "超声波音频", status: "已就绪" },
+          ],
+    );
   }, [activeExperiment.id]);
 
   useEffect(() => {
     if (!running) return;
     const timer = window.setTimeout(() => {
-      setStepIndex((current) => Math.min(current + 1, analysisSteps.length));
+      setStepIndex((current) => Math.min(current + 1, analysisPipeline.length));
     }, 520);
     return () => window.clearTimeout(timer);
   }, [running, stepIndex]);
 
   useEffect(() => {
-    if (!running || stepIndex < analysisSteps.length) return;
+    if (!activeJob || stepIndex < 0 || stepIndex >= analysisPipeline.length) return;
+    const stage = analysisPipeline[stepIndex];
+    const nextProgress = getStageProgress(stepIndex);
+    if (
+      activeJob.status !== "运行中" ||
+      activeJob.progress !== nextProgress ||
+      activeJob.currentStage !== stage.key
+    ) {
+      onUpsertJob({
+        ...activeJob,
+        status: "运行中",
+        progress: nextProgress,
+        currentStage: stage.key,
+        updatedAt: formatNow(),
+      });
+    }
+  }, [activeJob, onUpsertJob, stepIndex]);
+
+  useEffect(() => {
+    if (!running || stepIndex < analysisPipeline.length || !activeJob) return;
     setRunning(false);
     setReportDraftReady(true);
-    onAnalysisComplete(activeExperiment.id);
-  }, [activeExperiment.id, onAnalysisComplete, running, stepIndex]);
+    if (activeJob.status !== "已完成") {
+      onCompleteJob(activeJob);
+    }
+  }, [activeJob, onCompleteJob, running, stepIndex]);
 
   const startAnalysis = () => {
+    const job = createAnalysisJob(activeExperiment, selectedTasks);
+    setActiveJobId(job.id);
+    onUpsertJob({ ...job, status: "运行中", updatedAt: formatNow() });
+    setStepIndex(0);
+    setRunning(true);
+    setReportDraftReady(false);
+  };
+
+  const retryJob = (job: AnalysisJob) => {
+    onRetryJob(job.id);
+    setActiveJobId(job.id);
     setStepIndex(0);
     setRunning(true);
     setReportDraftReady(false);
@@ -1131,17 +1611,7 @@ function AnalysisPage({
 
   const handleFiles = (fileList: FileList | null) => {
     if (!fileList?.length) return;
-    const next = Array.from(fileList).map((file) => ({
-      name: file.name,
-      size: `${Math.max(file.size / 1024 / 1024, 0.1).toFixed(1)} MB`,
-      type:
-        file.name.endsWith(".wav")
-          ? "超声波音频"
-          : file.name.endsWith(".xlsx") || file.name.endsWith(".csv")
-            ? "实验信息表"
-            : "视频文件",
-      status: "上传完成",
-    }));
+    const next = Array.from(fileList).map(inferExperimentFile);
     setFiles((current) => [...current, ...next]);
   };
 
@@ -1265,7 +1735,7 @@ function AnalysisPage({
             <div className="space-y-3">
               {files.map((file) => (
                 <div
-                  key={`${file.name}-${file.type}`}
+                  key={file.id}
                   className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3"
                 >
                   <div className="min-w-0">
@@ -1288,6 +1758,91 @@ function AnalysisPage({
               {running ? "分析进行中" : "开始智能分析"}
             </Button>
           </Panel>
+
+          <Panel>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-ink">任务队列</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  排队、运行、失败和完成任务集中管理。
+                </p>
+              </div>
+              <Pill>{jobs.length} 个任务</Pill>
+            </div>
+            <div className="space-y-3">
+              {jobs.slice(0, 5).map((job) => (
+                <div
+                  key={job.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    setActiveJobId(job.id);
+                    onSelectExperiment(job.experimentId);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      setActiveJobId(job.id);
+                      onSelectExperiment(job.experimentId);
+                    }
+                  }}
+                  className={cn(
+                    "w-full cursor-pointer rounded-2xl border p-3 text-left transition",
+                    activeJob?.id === job.id
+                      ? "border-blue-300 bg-blue-50"
+                      : "border-slate-200 bg-white hover:border-blue-200",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-ink">{job.title}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {job.id} · {job.updatedAt}
+                      </p>
+                    </div>
+                    <StatusBadge status={job.status} pulse={job.status === "运行中"} />
+                  </div>
+                  <div className="mt-3">
+                    <ProgressLine value={job.progress} />
+                  </div>
+                  {job.failureReason ? (
+                    <p className="mt-2 text-xs leading-5 text-amber-700">
+                      {job.failureReason}
+                    </p>
+                  ) : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {job.status === "失败" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        icon={RotateCcw}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          retryJob(job);
+                        }}
+                      >
+                        重试
+                      </Button>
+                    ) : null}
+                    {job.reportId ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        icon={FileText}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onOpenReport(job.experimentId);
+                        }}
+                      >
+                        查看结果
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Panel>
         </div>
 
         <div className="space-y-5">
@@ -1300,33 +1855,38 @@ function AnalysisPage({
                     ? "分析结果已生成，报告草稿已就绪"
                     : stepsComplete
                       ? "正在整理报告草稿"
-                    : !hasStarted
-                      ? "等待启动分析任务"
-                      : analysisSteps[stepIndex]}
+                      : !hasStarted
+                        ? activeJob
+                          ? `${activeJob.status} · ${displayedStage?.detail ?? "等待下一步处理"}`
+                          : "等待启动分析任务"
+                        : displayedStage?.detail}
                 </p>
               </div>
-              <span className="text-2xl font-semibold text-blue-600">{progress}%</span>
+              <span className="text-2xl font-semibold text-blue-600">{displayedProgress}%</span>
             </div>
-            <ProgressLine value={progress} />
+            <ProgressLine value={displayedProgress} />
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
-              {analysisSteps.map((step, index) => (
+              {analysisPipeline.map((step, index) => (
                 <div
-                  key={step}
+                  key={step.key}
                   className={cn(
                     "flex items-center gap-2 rounded-2xl px-3 py-2 text-sm",
-                    index < stepIndex || stepsComplete
+                    index < displayedStageIndex || stepsComplete || activeJob?.status === "已完成"
                       ? "bg-emerald-50 text-emerald-700"
-                      : index === stepIndex
+                      : index === displayedStageIndex
                         ? "bg-blue-50 text-blue-700"
                         : "bg-slate-50 text-slate-500",
                   )}
                 >
-                  {index < stepIndex || stepsComplete ? (
+                  {index < displayedStageIndex || stepsComplete || activeJob?.status === "已完成" ? (
                     <CheckCircle2 className="h-4 w-4" />
                   ) : (
-                    <Sparkles className={cn("h-4 w-4", index === stepIndex && "animate-pulse")} />
+                    <Sparkles className={cn("h-4 w-4", index === displayedStageIndex && "animate-pulse")} />
                   )}
-                  {step}
+                  <span>
+                    <span className="block font-semibold">{step.title}</span>
+                    <span className="block text-xs opacity-75">{step.detail}</span>
+                  </span>
                 </div>
               ))}
             </div>
@@ -1512,12 +2072,16 @@ function AnalysisPage({
 
 function ReportsPage({
   activeReport,
+  reports,
+  experiments,
   onSelectReport,
   onSelectExperiment,
   onNavigate,
   generatedReportId,
 }: {
   activeReport: Report;
+  reports: Report[];
+  experiments: Experiment[];
   onSelectReport: (reportId: string, page?: PageKey) => void;
   onSelectExperiment: (experimentId: string, page?: PageKey) => void;
   onNavigate: (page: PageKey) => void;
@@ -1534,7 +2098,10 @@ function ReportsPage({
       demoStep="reports"
       onNavigate={onNavigate}
       action={
-        <Button icon={FileText} onClick={() => onNavigate("analysis")}>
+        <Button
+          icon={FileText}
+          onClick={() => onSelectExperiment(activeReport.experimentId, "analysis")}
+        >
           重新生成
         </Button>
       }
@@ -1559,7 +2126,7 @@ function ReportsPage({
               >
                 打印/导出 PDF
               </Button>
-              <DownloadButton onClick={() => downloadReport(activeReport)}>
+              <DownloadButton onClick={() => downloadReport(activeReport, experiments)}>
                 下载报告
               </DownloadButton>
             </div>
@@ -1614,7 +2181,7 @@ function ReportsPage({
                       >
                         预览
                       </Button>
-                      <DownloadButton onClick={() => downloadReport(report)}>
+                      <DownloadButton onClick={() => downloadReport(report, experiments)}>
                         下载
                       </DownloadButton>
                       <Button
@@ -1632,10 +2199,10 @@ function ReportsPage({
             </tbody>
           </ResponsiveTable>
         </Panel>
-
         <ReportDocument
           report={activeReport}
-          onDownload={() => downloadReport(activeReport)}
+          experiments={experiments}
+          onDownload={() => downloadReport(activeReport, experiments)}
           onPrint={() => window.print()}
           onOpenExperiment={() => onSelectExperiment(activeReport.experimentId, "experiments")}
           onRegenerate={() => {
@@ -1655,8 +2222,9 @@ function ReportsPage({
         {preview ? (
           <ReportDocument
             report={preview}
+            experiments={experiments}
             embedded
-            onDownload={() => downloadReport(preview)}
+            onDownload={() => downloadReport(preview, experiments)}
             onPrint={() => window.print()}
             onOpenExperiment={() => onSelectExperiment(preview.experimentId, "experiments")}
             onRegenerate={() => {
@@ -1670,8 +2238,17 @@ function ReportsPage({
   );
 }
 
-function PilotPage({ onNavigate }: { onNavigate: (page: PageKey) => void }) {
+function PilotPage({
+  leads,
+  onCreateLead,
+  onNavigate,
+}: {
+  leads: PilotLead[];
+  onCreateLead: (draft: Parameters<typeof createPilotLead>[0]) => PilotLead;
+  onNavigate: (page: PageKey) => void;
+}) {
   const [submitted, setSubmitted] = useState(false);
+  const [submittedLead, setSubmittedLead] = useState<PilotLead | null>(null);
   const [needsLocal, setNeedsLocal] = useState(false);
   const [form, setForm] = useState({
     company: "",
@@ -1737,6 +2314,66 @@ function PilotPage({ onNavigate }: { onNavigate: (page: PageKey) => void }) {
               ))}
             </div>
           </Panel>
+
+          <Panel>
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-ink">试点线索跟进</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  申请会进入运营视角，方便跟进试点状态和下一步动作。
+                </p>
+              </div>
+              <Pill>{leads.length} 条线索</Pill>
+            </div>
+            <div className="space-y-3">
+              {leads.map((lead) => (
+                <div
+                  key={lead.id}
+                  className={cn(
+                    "rounded-2xl border p-4",
+                    submittedLead?.id === lead.id
+                      ? "border-blue-300 bg-blue-50"
+                      : "border-slate-200 bg-white",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-ink">
+                        {lead.company}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {lead.id} · {lead.industry} · {lead.createdAt}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <StatusBadge status={lead.status} />
+                      <span
+                        className={cn(
+                          "rounded-full px-2.5 py-1 text-xs font-semibold",
+                          lead.priority === "高"
+                            ? "bg-rose-50 text-rose-700"
+                            : lead.priority === "中"
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-slate-100 text-slate-600",
+                        )}
+                      >
+                        {lead.priority}优先级
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    下一步：{lead.nextAction}
+                  </p>
+                  <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                    <span>联系人：{lead.contact} / {lead.phone}</span>
+                    <span>需求：{lead.need}</span>
+                    <span>规模：{lead.scale}</span>
+                    <span>数据：{lead.dataType}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Panel>
         </div>
 
         <Panel>
@@ -1755,7 +2392,9 @@ function PilotPage({ onNavigate }: { onNavigate: (page: PageKey) => void }) {
                 已收到您的试点申请
               </h4>
               <p className="mt-3 text-sm leading-6 text-slate-600">
-                项目团队将在 1 个工作日内与您联系。
+                {submittedLead
+                  ? `线索 ${submittedLead.id} 已进入跟进列表，下一步：${submittedLead.nextAction}。`
+                  : "项目团队将在 1 个工作日内与您联系。"}
               </p>
               <Button className="mt-6" variant="secondary" onClick={() => setSubmitted(false)}>
                 继续填写
@@ -1766,6 +2405,11 @@ function PilotPage({ onNavigate }: { onNavigate: (page: PageKey) => void }) {
               className="grid gap-4"
               onSubmit={(event) => {
                 event.preventDefault();
+                const lead = onCreateLead({
+                  ...form,
+                  needsLocal,
+                });
+                setSubmittedLead(lead);
                 setSubmitted(true);
               }}
             >
@@ -1997,6 +2641,7 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 function ReportDocument({
   report,
+  experiments,
   embedded,
   onDownload,
   onPrint,
@@ -2004,6 +2649,7 @@ function ReportDocument({
   onRegenerate,
 }: {
   report: Report;
+  experiments: Experiment[];
   embedded?: boolean;
   onDownload?: () => void;
   onPrint?: () => void;
