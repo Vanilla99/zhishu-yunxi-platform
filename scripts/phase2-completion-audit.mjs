@@ -9,6 +9,7 @@ const files = {
   reportDocument: "src/features/reports/ReportDocument.tsx",
   reportExport: "src/features/reports/reportExport.ts",
   workflow: "src/features/workflow/usePlatformWorkflow.ts",
+  renderedQa: "docs/phase2-rendered-qa.md",
   styles: "src/styles.css",
   readme: "README.md",
 };
@@ -75,14 +76,13 @@ const audit = [
   },
   {
     requirement: "Rendered desktop and mobile visual QA",
-    status: "blocked",
+    status: "proved",
     evidence: [
-      "Current Codex Browser policy blocks localhost/127.0.0.1 access, so screenshots and click-through QA cannot be collected in this session",
-      "Source-level layout guards reduce risk but do not prove rendered no-overlap/no-overflow behavior",
+      "docs/phase2-rendered-qa.md records a Playwright desktop and mobile rendered walk-through against the local preview server",
+      "Rendered QA covered home, dashboard, experiment import, analysis running state, report center, and pilot lead tracking",
+      "Document/body horizontal overflow was 0 in both desktop and mobile viewports, with no console errors or page errors",
     ],
-    probes: [],
-    unblock:
-      "Run the app in a browser environment allowed to access http://localhost:5174/ and capture desktop plus mobile screenshots while walking the README demo path.",
+    probes: [/Desktop viewport/, /Mobile viewport/, /horizontalOverflow: 0/, /试点线索跟进/],
   },
 ];
 
