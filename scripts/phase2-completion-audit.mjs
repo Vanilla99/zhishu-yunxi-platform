@@ -5,6 +5,10 @@ const files = {
   data: "src/data/platformData.ts",
   service: "src/data/mockService.ts",
   ui: "src/components/ui.tsx",
+  dataDisplay: "src/components/data-display.tsx",
+  reportDocument: "src/features/reports/ReportDocument.tsx",
+  reportExport: "src/features/reports/reportExport.ts",
+  workflow: "src/features/workflow/usePlatformWorkflow.ts",
   styles: "src/styles.css",
   readme: "README.md",
 };
@@ -20,7 +24,7 @@ const audit = [
     evidence: [
       "src/data/platformData.ts exports ExperimentFile, AnalysisJob, PilotLead, Report types",
       "src/data/mockService.ts creates experiments, jobs, reports, and pilot leads",
-      "src/App.tsx owns experimentRows, analysisJobs, reportRows, and pilotLeads state",
+      "src/features/workflow/usePlatformWorkflow.ts owns experimentRows, analysisJobs, reportRows, and pilotLeads state",
     ],
     probes: [/export type AnalysisJob/, /setAnalysisJobs/, /createReportFromJob/],
   },
@@ -46,7 +50,7 @@ const audit = [
     requirement: "Product-grade report workflow",
     status: "proved",
     evidence: [
-      "Report center has list, preview modal, report document, regenerate, print/export, download, and experiment back-reference",
+      "Report center has list, preview modal, modular report document, regenerate, print/export, download, and experiment back-reference",
       "Report document includes summary metrics, behavior result, ultrasound result, fusion conclusion, and next-step suggestion",
     ],
     probes: [/报告列表/, /function ReportDocument/, /打印\/导出 PDF/, /查看实验详情/],

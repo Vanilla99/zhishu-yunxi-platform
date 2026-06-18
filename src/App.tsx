@@ -1,21 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
   Activity,
   ArrowRight,
   AudioWaveform,
@@ -45,7 +29,6 @@ import {
   Search,
   Send,
   Sparkles,
-  Star,
   UploadCloud,
   Video,
   X,
@@ -62,14 +45,10 @@ import {
   dashboardMetrics,
   dataTypeShare,
   dataTypes,
-  experiments,
-  initialAnalysisJobs,
-  initialPilotLeads,
   navItems,
   painPoints,
   pilotMethods,
   pilotTargets,
-  reports,
   reportSummary,
   reportTypes,
   scenarios,
@@ -84,14 +63,29 @@ import {
   type Report,
 } from "./data/platformData";
 import {
-  createAnalysisJob,
-  createExperimentFromDraft,
-  createPilotLead,
-  createReportFromJob,
   formatNow,
   getStageProgress,
   inferExperimentFile,
+  type ExperimentDraft,
+  type PilotDraft,
 } from "./data/mockService";
+import {
+  AreaTrendChart,
+  ChartLegend,
+  DonutChart,
+  GroupedBarChart,
+  LineTrendChart,
+} from "./components/charts";
+import {
+  ChartPanel,
+  ExperimentTable,
+  InfoGrid,
+  MiniStat,
+  ResponsiveTable,
+} from "./components/data-display";
+import { ReportDocument } from "./features/reports/ReportDocument";
+import { downloadReport } from "./features/reports/reportExport";
+import { usePlatformWorkflow } from "./features/workflow/usePlatformWorkflow";
 import { cn } from "./lib/utils";
 import {
   Button,
@@ -110,12 +104,6 @@ import {
   StatusBadge,
 } from "./components/ui";
 
-const tooltipStyle = {
-  borderRadius: "18px",
-  border: "1px solid rgba(226,232,240,0.9)",
-  boxShadow: "0 18px 50px rgba(15,23,42,0.12)",
-};
-
 const showcasePath: Array<{ key: PageKey; label: string; caption: string }> = [
   { key: "dashboard", label: "数据驾驶舱", caption: "锁定重点实验" },
   { key: "experiments", label: "实验详情", caption: "复核数据与文件" },
@@ -124,215 +112,31 @@ const showcasePath: Array<{ key: PageKey; label: string; caption: string }> = [
   { key: "pilot", label: "合作试点", caption: "提交合作意向" },
 ];
 
-function getReportForExperiment(experimentId: string, reportRows: Report[]) {
-  return (
-    reportRows.find((report) => report.experimentId === experimentId) ??
-    reportRows[0] ??
-    reports[0]
-  );
-}
-
-function buildReportHtml(report: Report, experiment: Experiment) {
-  return `<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8" />
-  <title>${report.name}</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #0a1020; margin: 40px; line-height: 1.75; }
-    header { border-bottom: 1px solid #dbe4ef; padding-bottom: 20px; margin-bottom: 24px; }
-    h1 { font-size: 28px; margin: 0 0 12px; }
-    h2 { font-size: 18px; margin-top: 28px; }
-    .meta { color: #64748b; font-size: 13px; }
-    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    .box { border: 1px solid #dbe4ef; border-radius: 8px; padding: 14px; background: #f8fafc; }
-    .label { color: #64748b; font-size: 12px; margin: 0 0 4px; }
-    .value { font-weight: 700; margin: 0; }
-  </style>
-</head>
-<body>
-  <header>
-    <p class="meta">智鼠云析 · 小鼠行为智能分析与药物助研系统</p>
-    <h1>${report.name}</h1>
-    <p class="meta">报告编号 ${report.id} · 生成时间 ${report.generatedAt}</p>
-  </header>
-  <section class="grid">
-    <div class="box"><p class="label">实验编号</p><p class="value">${experiment.id}</p></div>
-    <div class="box"><p class="label">实验类型</p><p class="value">${experiment.type}</p></div>
-    <div class="box"><p class="label">数据类型</p><p class="value">${experiment.dataType}</p></div>
-    <div class="box"><p class="label">行为结论</p><p class="value">${report.conclusion}</p></div>
-  </section>
-  <h2>多模态融合结论</h2>
-  <p>视频行为识别结果显示，${experiment.mouseId} 在当前实验条件下的静止片段持续时间增加，行走轨迹覆盖面积下降；超声波分析显示叫声密度与平均功率同步下降。融合模型综合判断药物干预后行为活跃度下降，融合置信度为 93%。</p>
-  <h2>辅助建议</h2>
-  <p>建议对 00:06:03-00:06:47 的追逐片段进行人工复核，并在相同剂量下补充 2 组重复实验。</p>
-</body>
-</html>`;
-}
-
-function downloadReport(report: Report, experimentRows: Experiment[]) {
-  const experiment =
-    experimentRows.find((item) => item.id === report.experimentId) ?? experiments[0];
-  const blob = new Blob([buildReportHtml(report, experiment)], {
-    type: "text/html;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${report.id}-${experiment.id}.html`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-type AppState = {
-  page: PageKey;
-  selectedExperimentId: string;
-  selectedReportId: string;
-};
-
 export default function App() {
-  const [experimentRows, setExperimentRows] = useState<Experiment[]>(() => experiments);
-  const [reportRows, setReportRows] = useState<Report[]>(() => reports);
-  const [analysisJobs, setAnalysisJobs] = useState<AnalysisJob[]>(() => initialAnalysisJobs);
-  const [pilotLeads, setPilotLeads] = useState<PilotLead[]>(() => initialPilotLeads);
-  const [state, setState] = useState<AppState>({
-    page: "home",
-    selectedExperimentId: experiments[0].id,
-    selectedReportId: reports[0].id,
-  });
-  const [analysisSignal, setAnalysisSignal] = useState({
-    completedExperimentId: experiments[0].id,
-    generatedReportId: reports[0].id,
-  });
-
-  const navigate = (page: PageKey) => {
-    setState((current) => ({ ...current, page }));
-  };
-
-  const selectExperiment = (experimentId: string, page?: PageKey) => {
-    const relatedReport = getReportForExperiment(experimentId, reportRows);
-    setState((current) => ({
-      ...current,
-      selectedExperimentId: experimentId,
-      selectedReportId: relatedReport.id,
-      page: page ?? current.page,
-    }));
-  };
-
-  const selectReport = (reportId: string, page?: PageKey) => {
-    const relatedReport = reportRows.find((item) => item.id === reportId);
-    setState((current) => ({
-      ...current,
-      selectedReportId: reportId,
-      selectedExperimentId: relatedReport?.experimentId ?? current.selectedExperimentId,
-      page: page ?? current.page,
-    }));
-  };
-
-  const openReportForExperiment = (experimentId: string) => {
-    const relatedReport = getReportForExperiment(experimentId, reportRows);
-    setState((current) => ({
-      ...current,
-      selectedExperimentId: experimentId,
-      selectedReportId: relatedReport.id,
-      page: "reports",
-    }));
-  };
-
-  const importExperiment = (draft: Parameters<typeof createExperimentFromDraft>[0], files: ExperimentFile[]) => {
-    const experiment = createExperimentFromDraft(draft, files, experimentRows.length);
-    setExperimentRows((current) => [experiment, ...current]);
-    setState((current) => ({
-      ...current,
-      selectedExperimentId: experiment.id,
-      page: "experiments",
-    }));
-    return experiment;
-  };
-
-  const upsertAnalysisJob = (job: AnalysisJob) => {
-    setAnalysisJobs((current) => {
-      const exists = current.some((item) => item.id === job.id);
-      return exists
-        ? current.map((item) => (item.id === job.id ? job : item))
-        : [job, ...current];
-    });
-  };
-
-  const completeAnalysisJob = (job: AnalysisJob) => {
-    const experiment =
-      experimentRows.find((item) => item.id === job.experimentId) ?? experimentRows[0];
-    const report = createReportFromJob(job, experiment, reportRows);
-    const completedJob: AnalysisJob = {
-      ...job,
-      status: "已完成",
-      progress: 100,
-      currentStage: "report",
-      reportId: report.id,
-      updatedAt: report.generatedAt,
-      failureReason: undefined,
-    };
-
-    setAnalysisJobs((current) =>
-      current.map((item) => (item.id === job.id ? completedJob : item)),
-    );
-    setReportRows((current) => [report, ...current.filter((item) => item.id !== report.id)]);
-    setExperimentRows((current) =>
-      current.map((item) =>
-        item.id === job.experimentId
-          ? {
-              ...item,
-              status: "已完成",
-              reportReady: true,
-              confidence: Math.max(item.confidence, report.score),
-              lastAnalysis: report.generatedAt,
-              keyFinding: report.conclusion,
-            }
-          : item,
-      ),
-    );
-    setAnalysisSignal({
-      completedExperimentId: job.experimentId,
-      generatedReportId: report.id,
-    });
-    setState((current) => ({
-      ...current,
-      selectedExperimentId: job.experimentId,
-      selectedReportId: report.id,
-    }));
-  };
-
-  const retryAnalysisJob = (jobId: string) => {
-    setAnalysisJobs((current) =>
-      current.map((job) =>
-        job.id === jobId
-          ? {
-              ...job,
-              status: "排队中",
-              progress: 0,
-              currentStage: "validate",
-              failureReason: undefined,
-            }
-          : job,
-      ),
-    );
-  };
-
-  const addPilotLead = (draft: Parameters<typeof createPilotLead>[0]) => {
-    const lead = createPilotLead(draft, pilotLeads.length);
-    setPilotLeads((current) => [lead, ...current]);
-    return lead;
-  };
+  const {
+    state,
+    experimentRows,
+    reportRows,
+    analysisJobs,
+    pilotLeads,
+    analysisSignal,
+    activeExperiment,
+    activeReport,
+    navigate,
+    selectExperiment,
+    selectReport,
+    openReportForExperiment,
+    importExperiment,
+    createJobForActiveExperiment,
+    upsertAnalysisJob,
+    completeAnalysisJob,
+    retryAnalysisJob,
+    addPilotLead,
+  } = usePlatformWorkflow();
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [state.page]);
-
-  const activeExperiment =
-    experimentRows.find((item) => item.id === state.selectedExperimentId) ??
-    experimentRows[0];
-  const activeReport =
-    reportRows.find((item) => item.id === state.selectedReportId) ?? reportRows[0];
 
   return (
     <div className="min-h-screen bg-[#f5f8fc] text-ink antialiased">
@@ -364,7 +168,7 @@ export default function App() {
             jobs={analysisJobs}
             onSelectExperiment={selectExperiment}
             onNavigate={navigate}
-            onCreateJob={(tasks) => createAnalysisJob(activeExperiment, tasks)}
+            onCreateJob={createJobForActiveExperiment}
             onUpsertJob={upsertAnalysisJob}
             onCompleteJob={completeAnalysisJob}
             onRetryJob={retryAnalysisJob}
@@ -859,24 +663,7 @@ function DashboardPage({
 
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
         <ChartPanel title="行为类型分布" icon={Activity}>
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
-              <Pie
-                data={behaviorDistribution}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={72}
-                outerRadius={108}
-                paddingAngle={4}
-                isAnimationActive={false}
-              >
-                {behaviorDistribution.map((entry) => (
-                  <Cell key={entry.name} fill={entry.fill} />
-                ))}
-              </Pie>
-              <Tooltip contentStyle={tooltipStyle} />
-            </PieChart>
-          </ResponsiveContainer>
+          <DonutChart data={behaviorDistribution} />
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             {behaviorDistribution.map((item) => (
               <div key={item.name} className="flex items-center gap-2 text-xs">
@@ -891,101 +678,56 @@ function DashboardPage({
         </ChartPanel>
 
         <ChartPanel title="超声波活跃趋势" icon={AudioWaveform}>
-          <ResponsiveContainer width="100%" height={320}>
-            <AreaChart data={ultrasoundTrend}>
-              <defs>
-                <linearGradient id="active" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.36} />
-                  <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="density" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.36} />
-                  <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" />
-              <XAxis dataKey="time" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Area
-                type="monotone"
-                dataKey="active"
-                name="活跃指数"
-                stroke="#2563eb"
-                fill="url(#active)"
-                strokeWidth={3}
-                isAnimationActive={false}
-              />
-              <Area
-                type="monotone"
-                dataKey="density"
-                name="叫声密度"
-                stroke="#14b8a6"
-                fill="url(#density)"
-                strokeWidth={3}
-                isAnimationActive={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          <AreaTrendChart
+            data={ultrasoundTrend}
+            xKey="time"
+            height={320}
+            series={[
+              { key: "active", label: "活跃指数", color: "#2563eb" },
+              { key: "density", label: "叫声密度", color: "#14b8a6" },
+            ]}
+          />
+          <ChartLegend
+            series={[
+              { label: "活跃指数", color: "#2563eb" },
+              { label: "叫声密度", color: "#14b8a6" },
+            ]}
+          />
         </ChartPanel>
 
         <ChartPanel title="药物浓度与行为频次关系" icon={FlaskConical}>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={concentrationRelation}>
-              <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" />
-              <XAxis
-                dataKey="concentration"
-                tickLine={false}
-                axisLine={false}
-                label={{ value: "浓度 μM", position: "insideBottom", offset: -5 }}
-              />
-              <YAxis tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar
-                dataKey="frequency"
-                name="行为频次"
-                radius={[12, 12, 0, 0]}
-                fill="#2563eb"
-                isAnimationActive={false}
-              />
-              <Bar
-                dataKey="activity"
-                name="活跃度"
-                radius={[12, 12, 0, 0]}
-                fill="#14b8a6"
-                isAnimationActive={false}
-              />
-            </BarChart>
-          </ResponsiveContainer>
+          <GroupedBarChart
+            data={concentrationRelation}
+            xKey="concentration"
+            xAxisLabel="浓度 μM"
+            series={[
+              { key: "frequency", label: "行为频次", color: "#2563eb" },
+              { key: "activity", label: "活跃度", color: "#14b8a6" },
+            ]}
+          />
+          <ChartLegend
+            series={[
+              { label: "行为频次", color: "#2563eb" },
+              { label: "活跃度", color: "#14b8a6" },
+            ]}
+          />
         </ChartPanel>
 
         <ChartPanel title="任务完成与报告趋势" icon={LayoutDashboard}>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={completionTrend}>
-              <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" />
-              <XAxis dataKey="day" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Line
-                type="monotone"
-                dataKey="completed"
-                name="完成任务"
-                stroke="#4865ff"
-                strokeWidth={3}
-                dot={{ r: 5 }}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="reports"
-                name="生成报告"
-                stroke="#8b5cf6"
-                strokeWidth={3}
-                dot={{ r: 5 }}
-                isAnimationActive={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <LineTrendChart
+            data={completionTrend}
+            xKey="day"
+            series={[
+              { key: "completed", label: "完成任务", color: "#4865ff" },
+              { key: "reports", label: "生成报告", color: "#8b5cf6" },
+            ]}
+          />
+          <ChartLegend
+            series={[
+              { label: "完成任务", color: "#4865ff" },
+              { label: "生成报告", color: "#8b5cf6" },
+            ]}
+          />
         </ChartPanel>
       </div>
 
@@ -1025,7 +767,7 @@ function ExperimentsPage({
   onNavigate: (page: PageKey) => void;
   onSelectExperiment: (experimentId: string, page?: PageKey) => void;
   onImportExperiment: (
-    draft: Parameters<typeof createExperimentFromDraft>[0],
+    draft: ExperimentDraft,
     files: ExperimentFile[],
   ) => Experiment;
 }) {
@@ -1042,7 +784,7 @@ function ExperimentsPage({
   const [importOpen, setImportOpen] = useState(false);
   const [importedFiles, setImportedFiles] = useState<ExperimentFile[]>([]);
   const importFileInput = useRef<HTMLInputElement | null>(null);
-  const [draft, setDraft] = useState<Parameters<typeof createExperimentFromDraft>[0]>({
+  const [draft, setDraft] = useState<ExperimentDraft>({
     label: "新导入药物反应样例",
     type: "药物影响评估",
     mouseId: "M-NX45",
@@ -1630,7 +1372,7 @@ function AnalysisPage({
   }, [activeJob, onCompleteJob, running, stepIndex]);
 
   const startAnalysis = () => {
-    const job = createAnalysisJob(activeExperiment, selectedTasks);
+    const job = onCreateJob(selectedTasks);
     setActiveJobId(job.id);
     onUpsertJob({ ...job, status: "运行中", updatedAt: formatNow() });
     setStepIndex(0);
@@ -2006,36 +1748,22 @@ function AnalysisPage({
 
           <div className="grid gap-5 lg:grid-cols-2">
             <ChartPanel title="超声波波形图" icon={AudioWaveform}>
-              <ResponsiveContainer width="100%" height={240}>
-                <AreaChart data={waveformData}>
-                  <defs>
-                    <linearGradient id="wave" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="t" hide />
-                  <YAxis hide />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Area
-                    dataKey="amp"
-                    name="振幅"
-                    stroke="#06b6d4"
-                    strokeWidth={3}
-                    fill="url(#wave)"
-                    type="monotone"
-                    isAnimationActive={false}
-                  />
-                  <Line
-                    dataKey="freq"
-                    name="频率"
-                    stroke="#8b5cf6"
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <AreaTrendChart
+                data={waveformData}
+                xKey="t"
+                height={240}
+                compact
+                series={[
+                  { key: "amp", label: "振幅", color: "#06b6d4" },
+                  { key: "freq", label: "频率", color: "#8b5cf6" },
+                ]}
+              />
+              <ChartLegend
+                series={[
+                  { label: "振幅", color: "#06b6d4" },
+                  { label: "频率", color: "#8b5cf6" },
+                ]}
+              />
             </ChartPanel>
             <Panel>
               <div className="mb-4 flex items-center justify-between">
@@ -2289,7 +2017,7 @@ function PilotPage({
   onNavigate,
 }: {
   leads: PilotLead[];
-  onCreateLead: (draft: Parameters<typeof createPilotLead>[0]) => PilotLead;
+  onCreateLead: (draft: PilotDraft) => PilotLead;
   onNavigate: (page: PageKey) => void;
 }) {
   const [submitted, setSubmitted] = useState(false);
@@ -2540,272 +2268,6 @@ function PilotPage({
         </Panel>
       </div>
     </PageFrame>
-  );
-}
-
-function ChartPanel({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  icon: React.ElementType;
-  children: React.ReactNode;
-}) {
-  return (
-    <Panel>
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-ink">{title}</h3>
-        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-blue-50 text-blue-600">
-          <Icon className="h-5 w-5" />
-        </span>
-      </div>
-      {children}
-    </Panel>
-  );
-}
-
-function ExperimentTable({
-  experiments: rows,
-  onView,
-  onAnalyze,
-  onReport,
-  onFocus,
-  compact,
-}: {
-  experiments: Experiment[];
-  onView: (id: string) => void;
-  onAnalyze: (id: string) => void;
-  onReport: (id: string) => void;
-  onFocus?: (id: string) => void;
-  compact?: boolean;
-}) {
-  return (
-    <ResponsiveTable>
-      <thead>
-        <tr>
-          {[
-            "实验编号",
-            "实验标签",
-            "实验类型",
-            "小鼠编号",
-            "小鼠性别",
-            "注射药物",
-            "药物浓度",
-            "数据类型",
-            compact ? "状态" : "最近分析时间",
-            "操作",
-          ].map((head) => (
-            <th key={head}>{head}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((item) => (
-          <tr key={item.id}>
-            <td className="min-w-[116px] font-semibold text-ink">{item.id}</td>
-            <td className="min-w-[150px]">{item.label}</td>
-            <td>{item.type}</td>
-            <td>{item.mouseId}</td>
-            <td>{item.sex}</td>
-            <td className="min-w-[130px]">{item.drug}</td>
-            <td>{item.concentration}</td>
-            <td className="min-w-[160px]">{item.dataType}</td>
-            <td>
-              {compact ? (
-                <StatusBadge status={item.status} pulse={item.status === "分析中"} />
-              ) : (
-                item.lastAnalysis
-              )}
-            </td>
-            <td>
-              <div className="flex min-w-[260px] flex-wrap gap-2">
-                <Button size="sm" variant="outline" icon={Eye} onClick={() => onView(item.id)}>
-                  查看详情
-                </Button>
-                <Button size="sm" variant="outline" icon={Play} onClick={() => onAnalyze(item.id)}>
-                  发起分析
-                </Button>
-                <Button size="sm" variant="outline" icon={FileText} onClick={() => onReport(item.id)}>
-                  生成报告
-                </Button>
-                {onFocus ? (
-                  <button
-                    onClick={() => onFocus(item.id)}
-                    className={cn(
-                      "grid h-9 w-9 place-items-center rounded-full border transition",
-                      item.focus
-                        ? "border-amber-200 bg-amber-50 text-amber-500"
-                        : "border-slate-200 bg-white text-slate-400 hover:text-amber-500",
-                    )}
-                    title="加入重点关注"
-                  >
-                    <Star className="h-4 w-4" fill={item.focus ? "currentColor" : "none"} />
-                  </button>
-                ) : null}
-              </div>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </ResponsiveTable>
-  );
-}
-
-function ResponsiveTable({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left text-sm">
-        {children}
-      </table>
-    </div>
-  );
-}
-
-function InfoGrid({ items }: { items: Array<[string, string]> }) {
-  return (
-    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-      {items.map(([label, value]) => (
-        <div key={label} className="rounded-2xl border border-slate-200 bg-white p-3">
-          <p className="text-xs font-semibold text-slate-500">{label}</p>
-          <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 p-4">
-      <p className="text-xs font-semibold text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-semibold text-ink">{value}</p>
-    </div>
-  );
-}
-
-function ReportDocument({
-  report,
-  experiments,
-  embedded,
-  onDownload,
-  onPrint,
-  onOpenExperiment,
-  onRegenerate,
-}: {
-  report: Report;
-  experiments: Experiment[];
-  embedded?: boolean;
-  onDownload?: () => void;
-  onPrint?: () => void;
-  onOpenExperiment?: () => void;
-  onRegenerate?: () => void;
-}) {
-  const experiment =
-    experiments.find((item) => item.id === report.experimentId) ?? experiments[0];
-
-  return (
-    <Panel
-      className={cn(
-        "report-document bg-white",
-        embedded ? "shadow-none ring-1 ring-slate-100" : "min-h-[720px]",
-      )}
-    >
-      <div className="border-b border-slate-200 pb-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase text-blue-600">
-              智鼠云析 · Analysis report
-            </p>
-            <h3 className="mt-3 text-2xl font-semibold leading-tight text-ink">
-              {report.name}
-            </h3>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              报告编号 {report.id} · 生成时间 {report.generatedAt}
-            </p>
-          </div>
-          <StatusBadge status={report.status} pulse={report.status === "生成中"} />
-        </div>
-      </div>
-
-      <div className="grid gap-3 border-b border-slate-200 py-5 sm:grid-cols-3">
-        {[
-          ["报告完整度", `${report.score}%`],
-          ["复核状态", report.status === "待复核" ? "建议复核" : "可用于交流"],
-          ["导出版本", "PDF / HTML"],
-        ].map(([label, value]) => (
-          <div key={label} className="rounded-lg bg-slate-50 p-4">
-            <p className="text-xs font-semibold text-slate-500">{label}</p>
-            <p className="mt-2 text-lg font-semibold text-ink">{value}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid gap-5 border-b border-slate-200 py-6 md:grid-cols-4">
-        {[
-          ["实验编号", report.experimentId],
-          ["实验类型", experiment.type],
-          ["数据类型", experiment.dataType],
-          ["行为结论", report.conclusion],
-        ].map(([label, value]) => (
-          <div key={label}>
-            <p className="text-xs font-semibold text-slate-500">{label}</p>
-            <p className="mt-2 text-sm font-semibold leading-6 text-ink">{value}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid gap-5 py-6 lg:grid-cols-[1fr_0.9fr]">
-        <div>
-          <h4 className="text-lg font-semibold text-ink">多模态融合结论</h4>
-          <p className="mt-3 text-sm leading-7 text-slate-600">
-            视频行为识别结果显示，{experiment.mouseId} 在当前实验条件下的静止片段持续时间增加，行走轨迹覆盖面积下降；超声波分析显示叫声密度与平均功率同步下降。融合模型综合判断药物干预后行为活跃度下降，融合置信度为 93%。
-          </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {reportSummary.map((item) => (
-              <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <item.icon className="h-5 w-5 text-blue-600" />
-                <p className="mt-3 text-xs font-semibold text-slate-500">{item.label}</p>
-                <p className="mt-1 text-base font-semibold text-ink">{item.value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-          <h4 className="font-semibold text-ink">AI 分析说明</h4>
-          <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-            <li>· 行为时间轴由目标检测、轨迹跟踪与行为分类模型共同生成。</li>
-            <li>· 超声波片段经过时序分割、频率统计与行为预测模型处理。</li>
-            <li>· 药物影响等级依据行为活跃度、声学密度与实验信息表综合评估。</li>
-          </ul>
-          <div className="mt-5 rounded-2xl bg-white p-4">
-            <p className="text-xs font-semibold text-slate-500">辅助建议</p>
-            <p className="mt-2 text-sm leading-6 text-ink">
-              建议对 00:06:03-00:06:47 的追逐片段进行人工复核，并在相同剂量下补充 2 组重复实验。
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 border-t border-slate-200 pt-6 sm:grid-cols-3">
-        <MiniStat label="行为识别结果" value="静止增强，追逐下降" />
-        <MiniStat label="超声波分析结果" value="叫声密度下降 18%" />
-        <MiniStat label="关键影响因素" value="剂量、静止时长、频谱功率" />
-      </div>
-
-      <div className="mt-6 flex flex-wrap gap-3">
-        <Button variant="outline" size="sm" icon={Printer} onClick={onPrint}>
-          打印/导出 PDF
-        </Button>
-        <DownloadButton onClick={onDownload}>下载报告</DownloadButton>
-        <Button variant="outline" size="sm" icon={RefreshCcw} onClick={onRegenerate}>
-          重新生成
-        </Button>
-        <Button variant="outline" size="sm" icon={PanelRightOpen} onClick={onOpenExperiment}>
-          查看实验详情
-        </Button>
-      </div>
-    </Panel>
   );
 }
 

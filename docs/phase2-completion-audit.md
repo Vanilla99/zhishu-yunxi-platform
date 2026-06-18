@@ -11,7 +11,7 @@ Date: 2026-06-17
 - Report center supports list, preview, detail document, regenerate, print/export, download, and experiment back-reference.
 - Pilot page creates a lead after submission and shows lead tracking with priority, status, need, data type, and next action.
 - Source-level design gates cover empty, loading, failure, retry, mobile navigation, table overflow, safe modal width, print styles, global overflow guards, long-text wrapping, media sizing, and typography constraints.
-- `npm run phase2:check`, `npm run build`, `npm audit --audit-level=moderate`, and `git diff --check` pass in the current workspace.
+- `npm run phase2:check`, `npm run build`, `npm audit --audit-level=moderate`, and `git diff --check` passed in the Phase 2 workspace snapshot.
 
 ## Still Not Proved
 
@@ -33,3 +33,13 @@ Run the app in a browser environment allowed to access `http://localhost:5174/`,
 8. Lead tracking
 
 After that visual QA evidence is captured and any discovered layout issues are fixed, Phase 2 can be marked complete.
+
+## Phase 3 Update
+
+Date: 2026-06-18
+
+- Workflow state has moved from `src/App.tsx` into `src/features/workflow/usePlatformWorkflow.ts`.
+- Report rendering and export logic have moved into `src/features/reports/`.
+- Recharts usage has been replaced by lightweight SVG chart components in `src/components/charts.tsx`.
+- Current checks pass through direct bundled Node execution: Phase 2 acceptance, Phase 2 completion audit, Phase 3 architecture check, TypeScript, and production Vite build.
+- Production build uses `scripts/build.mjs` plus `scripts/build-permission-shims.cjs` so this Codex permission profile does not need to read dependency files whose paths match restricted `token` patterns.

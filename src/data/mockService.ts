@@ -7,7 +7,7 @@ import {
   type Report,
 } from "./platformData";
 
-type ExperimentDraft = {
+export type ExperimentDraft = {
   label: string;
   type: string;
   mouseId: string;
@@ -20,7 +20,7 @@ type ExperimentDraft = {
   owner: string;
 };
 
-type PilotDraft = Omit<PilotLead, "id" | "priority" | "status" | "nextAction" | "createdAt">;
+export type PilotDraft = Omit<PilotLead, "id" | "priority" | "status" | "nextAction" | "createdAt">;
 
 const pad = (value: number) => String(value).padStart(2, "0");
 

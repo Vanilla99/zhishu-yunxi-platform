@@ -32,18 +32,28 @@ http://localhost:5174/
 
 ## 主要文件
 
-- `src/App.tsx`：页面结构、导航、演示路径和主要交互。
+- `src/App.tsx`：页面组装、导航和演示路径入口。
+- `src/features/workflow/usePlatformWorkflow.ts`：集中管理实验、分析任务、报告和试点线索的前端工作流状态。
+- `src/features/reports/ReportDocument.tsx`：产品级报告正文组件。
+- `src/features/reports/reportExport.ts`：报告 HTML 生成与下载逻辑。
+- `src/components/charts.tsx`：轻量 SVG 图表组件，替代重型图表运行时。
+- `src/components/data-display.tsx`：表格、图表面板、信息网格和小型指标等数据展示组件。
 - `src/data/platformData.ts`：集中管理实验、图表、报告、申请页等演示数据。
 - `src/data/mockService.ts`：模拟实验导入、分析任务创建、报告生成和合作线索创建。
 - `src/components/ui.tsx`：按钮、面板、状态标签、弹窗、进度条等复用组件。
 - `src/assets/hero-lab.png`：首页科研主视觉。
 - `src/styles.css`：全局样式、表格样式与报告打印样式。
 
+## Phase 3 优化目标
+
+Phase 3 的目标是让系统从可演示原型升级为更可维护、可扩展、可验证的前端工程：入口文件不再承载全部业务状态；跨页面工作流集中在 typed hook；报告导出和报告正文独立成 feature module；图表从 Recharts 切换为本地轻量 SVG 组件，减少主包压力；新增架构门禁防止回退到单文件和重型运行时。
+
 ## 验证命令
 
 ```bash
 npm run phase2:audit
 npm run phase2:check
+npm run phase3:check
 npm run build
 npm audit
 ```

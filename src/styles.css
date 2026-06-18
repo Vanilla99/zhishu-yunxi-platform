@@ -88,11 +88,6 @@ table tbody tr:hover {
   background: rgba(239, 246, 255, 0.72);
 }
 
-.recharts-wrapper,
-.recharts-surface {
-  outline: none;
-}
-
 @media (max-width: 640px) {
   table th,
   table td {
